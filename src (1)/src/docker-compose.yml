@@ -1,0 +1,118 @@
+services:
+  db:
+    image: postgis/postgis:15-3.3
+    container_name: tartus_dwh_db
+    env_file: .env
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  etl:
+    image: python:3.11-slim
+    container_name: tartus_dwh_etl
+    working_dir: /app
+    env_file: .env
+    environment:
+      - DSN=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    volumes:
+      - ./etl:/app/etl
+      - ./sample_data:/app/sample_data
+      - ./sql:/app/sql
+    ports:
+      - "8501:8501"
+    command: >
+      bash -c "pip install -r etl/requirements.txt && sleep infinity"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  airflow-webserver:
+    image: apache/airflow:2.9.3
+    container_name: tartus_airflow_webserver
+    env_file: .env
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
+      - DSN=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./etl:/app/etl
+      - ./sample_data:/app/sample_data
+      - ./sql:/app/sql
+      - airflow_home:/opt/airflow
+    command: webserver
+    depends_on:
+      db:
+        condition: service_healthy
+
+  airflow-scheduler:
+    image: apache/airflow:2.9.3
+    container_name: tartus_airflow_scheduler
+    env_file: .env
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=SequentialExecutor
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=sqlite:////opt/airflow/airflow.db
+      - DSN=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./etl:/app/etl
+      - ./sample_data:/app/sample_data
+      - ./sql:/app/sql
+      - airflow_home:/opt/airflow
+    command: scheduler
+    depends_on:
+      db:
+        condition: service_healthy
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter
+    container_name: tartus_postgres_exporter
+    env_file: .env
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable"
+    ports:
+      - "9187:9187"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:latest
+    container_name: tartus_cadvisor
+    ports:
+      - "8081:8080"
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    depends_on:
+      - db
+
+  prometheus:
+    image: prom/prometheus
+    container_name: tartus_prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      - postgres-exporter
+      - cadvisor
+
+volumes:
+  airflow_home:

@@ -1,0 +1,34 @@
+\documentclass[a4paper,14pt,russian]{extreport}
+
+\input{preamble}
+
+\addbibresource{ref-lib.bib}
+
+\begin{document}
+	\renewcommand{\contentsname}{\centerline{СОДЕРЖАНИЕ}}
+	
+	\include{title}
+	
+	\tableofcontents
+
+	% \setcounter{page}{3}
+	
+	\include{chapters/intro}
+	\include{chapters/chapter1}
+	\include{chapters/chapter2}
+	\include{chapters/chapter3}
+	\include{chapters/conclusion}
+
+    \titleformat{\chapter}[block]
+    {\large\bfseries}{\thechapter}{0.5em}{\large\raggedright}
+
+    \titleformat{\section}[block]
+    {\large\bfseries}{\thesection}{0.5em}{\large\raggedright}
+    \renewcommand{\thesection}{\arabic{chapter}.\arabic{section}.}
+
+	\printbibliography[title=\centerline{СПИСОК ИСПОЛЬЗОВАННЫХ ИСТОЧНИКОВ}]
+	\addcontentsline{toc}{part}{\textbf{СПИСОК ИСПОЛЬЗОВАННЫХ ИСТОЧНИКОВ}}
+	
+	\include{chapters/prilozh}
+
+\end{document}
