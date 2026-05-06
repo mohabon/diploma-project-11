@@ -1,60 +1,78 @@
-# Tartus DWH Prototype (Data Vault + PostGIS)
+# Пространственное хранилище данных мухафазы Тартус
 
-This is a **runnable prototype** of a spatial data warehouse using **PostgreSQL/PostGIS** and simple **ETL** scripts.
-It demonstrates:
-- Raw → Business (Data Vault) → Data Marts flow
-- Spatial join (parcels ↔ settlements)
-- Data Quality check (geometry validity)
-- Ready to run with Docker Compose
+Прототип пространственного хранилища данных на основе PostgreSQL/PostGIS, Data Vault 2.0 и аналитических витрин данных.
 
-## Quick start
+## Основные возможности
 
-1. Install Docker and Docker Compose.
-2. Copy env:
-   ```bash
-   cp .env.example .env
-   # optionally edit POSTGRES_PASSWORD in .env
-   ```
-3. Start DB and ETL container:
-   ```bash
-   docker compose up -d db etl
-   ```
-4. Load sample data to RAW and transform to DV + DM:
-   ```bash
-   docker compose exec etl python etl/load_raw.py
-   docker compose exec etl python etl/transform_business.py
-   ```
-5. Run data-quality checks:
-   ```bash
-   docker compose exec etl python etl/dq/test_cadastre.py
-   ```
-6. Verify that the main RAW, Data Vault and mart tables are populated:
-   ```bash
-   docker compose exec etl python verify_data.py
-   ```
-7. Start the Streamlit dashboard:
-   ```bash
-   docker compose exec etl streamlit run etl/dashboard.py --server.address 0.0.0.0
-   ```
-   Open `http://localhost:8501`.
+- PostgreSQL + PostGIS
+- Raw Layer → Data Vault → Data Marts
+- ETL/ELT на Python
+- Airflow orchestration
+- Data Quality checks
+- RBAC в PostgreSQL
+- Streamlit dashboard
+- Prometheus + Grafana monitoring
+- CI через GitHub Actions
 
-## Connect to database
+## Запуск проекта
 
-- Host: `localhost`
-- Port: `${POSTGRES_PORT}` (default 5432)
-- DB: `${POSTGRES_DB}`
-- User: `${POSTGRES_USER}`
-- Password: `${POSTGRES_PASSWORD}`
+### Запуск контейнеров
 
-## Schemas
-- `raw` — raw ingestion
-- `dv` — Data Vault hubs/links/satellites
-- `dm` — data marts (star-schema style)
+```bash
+docker compose up -d
+```
 
-## Runtime services
-- PostgreSQL/PostGIS: spatial storage and SQL analytics
-- Airflow: orchestration of RAW load, Data Vault transformation and DQ checks
-- Streamlit + Folium: dashboard and interactive thematic map
-- Prometheus + postgres-exporter + cAdvisor: database and container observability
+### Загрузка исходных данных
 
-Created on 2025-08-23.
+```bash
+docker compose exec etl python etl/load_raw.py
+```
+
+### Построение Data Vault и Data Marts
+
+```bash
+docker compose exec etl python etl/transform_business.py
+```
+
+### Проверки качества данных
+
+```bash
+docker compose exec etl python etl/dq/test_cadastre.py
+```
+
+### Проверка заполнения слоёв
+
+```bash
+docker compose exec etl python verify_data.py
+```
+
+### Запуск dashboard
+
+```bash
+docker compose exec etl streamlit run etl/dashboard.py --server.address 0.0.0.0
+```
+
+## Доступ к сервисам
+
+| Сервис | Адрес |
+|---|---|
+| Streamlit Dashboard | http://localhost:8501 |
+| Airflow | http://localhost:8080 |
+| Prometheus | http://localhost:9090 |
+| Grafana | http://localhost:3000 |
+
+## Основные сервисы
+
+- PostgreSQL/PostGIS
+- Airflow
+- Streamlit
+- Prometheus
+- Grafana
+- postgres-exporter
+- cAdvisor
+
+## Архитектура
+
+```text
+RAW → Data Vault → Data Marts → Dashboard
+```
