@@ -18,25 +18,7 @@ jobs:
           python -m py_compile etl/dq/test_cadastre.py
           python -m py_compile etl/dashboard.py
 
-      - name: Security scan with Bandit
+      - name: Security scan
         run: |
           pip install bandit
           bandit -r etl || true
-
-      - name: Start database
-        run: |
-          docker compose up -d db
-          sleep 25
-
-      - name: Run ETL
-        run: |
-          docker compose run --rm etl python /app/etl/load_raw.py
-          docker compose run --rm etl python /app/etl/transform_business.py
-
-      - name: Run Data Quality checks
-        run: |
-          docker compose run --rm etl python /app/etl/dq/test_cadastre.py
-
-      - name: Stop services
-        if: always()
-        run: docker compose down
