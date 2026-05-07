@@ -22,3 +22,10 @@ jobs:
         run: |
           pip install bandit
           bandit -r etl || true
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          exit-code: 0
+          severity: HIGH,CRITICAL
