@@ -53,7 +53,7 @@ services:
       - ./etl:/app/etl
       - ./sample_data:/app/sample_data
       - ./sql:/app/sql
-      - ./verify_data.py:/app/verify_data.py:ro
+      - ./tests/verify_data.py:/app/verify_data.py:ro
       - airflow_home:/opt/airflow
     command: webserver
     depends_on:
@@ -74,7 +74,7 @@ services:
       - ./etl:/app/etl
       - ./sample_data:/app/sample_data
       - ./sql:/app/sql
-      - ./verify_data.py:/app/verify_data.py:ro
+      - ./tests/verify_data.py:/app/verify_data.py:ro
       - airflow_home:/opt/airflow
     command: scheduler
     depends_on:
@@ -116,6 +116,14 @@ services:
     depends_on:
       - postgres-exporter
       - cadvisor
+
+  grafana:
+    image: grafana/grafana
+    container_name: tartus_grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
 
 volumes:
   airflow_home:
