@@ -43,9 +43,7 @@ docker compose exec etl python etl/dq/test_cadastre.py
 ### Проверка заполнения слоёв
 
 ```bash
-docker compose exec etl python verify_data.py
-```
-
+docker compose exec etl python /app/verify_data.py
 ### Запуск dashboard
 
 ```bash
