@@ -44,6 +44,8 @@ docker compose exec etl python etl/dq/test_cadastre.py
 
 ```bash
 docker compose exec etl python /app/verify_data.py
+```
+
 ### Запуск dashboard
 
 ```bash
