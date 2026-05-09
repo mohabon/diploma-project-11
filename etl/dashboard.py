@@ -38,7 +38,7 @@ conn = get_connection()
 def read_sql_safe(sql, connection, empty_columns=None):
     try:
         return pd.read_sql(sql, connection)
-    except Exception as e:
+    except Exception:
         if connection:
             connection.rollback()
         return pd.DataFrame(columns=empty_columns or [])
@@ -52,14 +52,12 @@ def load_data():
     if not conn:
         return data
 
-    # Землепользование теперь читается из dm.f_parcel_usage
     data["landuse"] = read_sql_safe("""
         SELECT year, category, objects_count, total_area_ha, share_percent
         FROM dm.f_parcel_usage
         ORDER BY year, total_area_ha DESC
     """, conn)
 
-    # Карта землепользования теперь читается из raw.parcel_raw и содержит год
     data["landuse_map"] = read_sql_safe("""
         SELECT
             year,
@@ -388,6 +386,8 @@ def indicator_ru(indicator):
         "Water quality improvement 2018-2023": "Индекс качества воды, 2018–2023",
         "NDVI change 2018-2023": "NDVI, 2018–2023",
         "Total road length, km": "Общая протяжённость дорог, км",
+        "Settlements within 5 km of main roads": "Поселения в пределах 5 км от основных дорог",
+        "Settlements with low transport accessibility": "Поселения с низкой транспортной доступностью",
     }
     return mapping.get(indicator, indicator)
 
@@ -618,6 +618,33 @@ with tabs[4]:
 with tabs[5]:
     st.header("🚗 Транспортная инфраструктура")
 
+    if "chapter3_results" in data and not data["chapter3_results"].empty:
+        transport_res = data["chapter3_results"][
+            data["chapter3_results"]["indicator"].isin([
+                "Settlements within 5 km of main roads",
+                "Settlements with low transport accessibility",
+            ])
+        ].copy()
+
+        if not transport_res.empty:
+            st.subheader("Сводные показатели транспортной доступности из главы 3")
+
+            t1, t2 = st.columns(2)
+
+            for _, row in transport_res.iterrows():
+                label = indicator_ru(row["indicator"])
+                value = f"{int(row['change_percent'])}%"
+
+                if row["indicator"] == "Settlements within 5 km of main roads":
+                    t1.metric(label, value)
+                else:
+                    t2.metric(label, value)
+
+            st.info(
+                "Сводные показатели 78% и 15% используются для сопоставления с результатами главы 3, "
+                "а таблица ниже показывает детализированную пространственную оценку по районам."
+            )
+
     if "access" in data and not data["access"].empty:
         acc = data["access"].copy()
         acc["district"] = acc["district"].apply(district_name_ru)
@@ -720,13 +747,22 @@ with tabs[6]:
         if 2013 in area_pivot.columns and 2023 in area_pivot.columns:
             area_pivot["Изменение, %"] = (
                 (area_pivot[2023] - area_pivot[2013]) / area_pivot[2013] * 100
-            ).round(2)
+            ).round(0)
 
-        st.dataframe(area_pivot.reset_index().rename(columns={"category_ru": "Тип землепользования"}), use_container_width=True, hide_index=True)
+        st.dataframe(
+            area_pivot.reset_index().rename(columns={"category_ru": "Тип землепользования"}),
+            use_container_width=True,
+            hide_index=True,
+        )
 
         if 2013 in area_pivot.columns and 2023 in area_pivot.columns:
             st.markdown("**Сравнение площадей по годам**")
             st.bar_chart(area_pivot[[2013, 2023]])
+
+        st.info(
+            "По результатам витрины dm.f_parcel_usage сельскохозяйственные угодья сократились "
+            "с 245 до 225 га, тогда как застроенные территории увеличились с 53 до 59 га."
+        )
     else:
         st.warning("Нет данных о землепользовании.")
 
@@ -775,6 +811,11 @@ with tabs[7]:
         with d:
             st.markdown("**Динамика индекса растительности NDVI**")
             st.line_chart(trend.set_index("year")["ndvi"])
+
+        st.info(
+            "Среднегодовая концентрация PM2.5 увеличилась с 21,0 до 22,3 мкг/м³ (+6%), "
+            "NO₂ — с 33 до 34 мкг/м³ (+3%), а индекс качества воды вырос с 0,68 до 0,74 (+9%)."
+        )
     else:
         st.warning("Нет экологических данных.")
 
@@ -863,6 +904,11 @@ with tabs[8]:
         with col6:
             st.markdown("**Уровень безработицы по районам**")
             st.bar_chart(latest_ru.set_index("Район")["Уровень безработицы, %"])
+
+        st.info(
+            "Численность населения увеличилась с 945 тыс. до 988 тыс. человек (+4,5%), "
+            "уровень занятости снизился с 61% до 57%, а индекс среднего дохода вырос с 1,00 до 1,08."
+        )
     else:
         st.warning("Нет данных о населении и экономике.")
 
@@ -898,26 +944,29 @@ with tabs[9]:
         [
             "1",
             "Землепользование",
-            "Площадь сельскохозяйственных угодий сократилась, тогда как площадь застроенных "
-            "и промышленных территорий увеличилась. Это подтверждает тенденцию к урбанизации."
+            "Сельскохозяйственные угодья сократились с 245 до 225 га (-8%), "
+            "площадь застроенных территорий увеличилась с 53 до 59 га (+12%), "
+            "а промышленность/инфраструктура выросла с 16 до 18 га (+12%)."
         ],
         [
             "2",
             "Транспортная доступность",
-            "Прибрежная зона характеризуется более высокой плотностью дорожной сети, "
-            "а внутренние и горные районы остаются менее связанными."
+            "78% поселений расположены в пределах 5 км от основных дорог, "
+            "при этом 15% поселений характеризуются низкой транспортной доступностью. "
+            "Детализированный анализ по районам показывает различия в протяжённости дорожной сети."
         ],
         [
             "3",
             "Экологическая нагрузка",
-            "Среднегодовые концентрации PM2.5 и NO₂ увеличились, при этом индекс качества воды "
-            "улучшился, а NDVI показывает снижение растительного покрова."
+            "Среднегодовая концентрация PM2.5 увеличилась с 21,0 до 22,3 мкг/м³ (+6%), "
+            "NO₂ — с 33 до 34 мкг/м³ (+3%), а индекс качества воды вырос с 0,68 до 0,74 (+9%)."
         ],
         [
             "4",
             "Демография и экономика",
-            "Численность населения умеренно выросла, индекс среднего дохода увеличился, "
-            "но уровень занятости снизился, что указывает на социально-экономические диспропорции."
+            "Численность населения увеличилась с 945 тыс. до 988 тыс. человек (+4,5%), "
+            "уровень занятости снизился с 61% до 57% (-7%), "
+            "а индекс среднего дохода вырос с 1,00 до 1,08 (+8%)."
         ],
     ], columns=["№", "Направление", "Вывод"])
 
@@ -929,25 +978,25 @@ with tabs[9]:
         [
             "1",
             "Землепользование",
-            "Ограничить экстенсивное расширение застройки, применять зональное планирование "
-            "и компенсирующие меры для сохранения сельскохозяйственных земель."
+            "Перейти от экстенсивного расширения городов к внутреннему уплотнению; "
+            "применять зональное планирование и компенсационные меры для сохранения сельскохозяйственных земель."
         ],
         [
             "2",
             "Транспорт",
-            "Модернизировать дороги в периферийных и горных районах, а также развивать "
-            "общественный транспорт между внутренними территориями и прибрежными центрами."
+            "Модернизировать дорожную сеть в периферийных и горных районах, "
+            "развивать общественный транспорт между прибрежными городами и внутренними поселениями."
         ],
         [
             "3",
             "Экология",
-            "Усилить мониторинг PM2.5, NO₂, NDVI и качества воды; продолжить модернизацию "
-            "очистных сооружений и контроль промышленных выбросов."
+            "Развивать сеть мониторинга PM2.5 и NO₂, усилить контроль промышленных выбросов "
+            "и продолжить модернизацию очистных сооружений."
         ],
         [
             "4",
             "Социально-экономическая сфера",
-            "Поддерживать агропромышленные кластеры, удалённые услуги и малый бизнес "
+            "Стимулировать агропромышленные кластеры, удалённые услуги и поддержку малого бизнеса "
             "в сельских и горных районах для снижения дисбаланса занятости."
         ],
     ], columns=["№", "Направление", "Рекомендация"])
@@ -1024,7 +1073,6 @@ with tabs[10]:
             index=len(eco_year_options) - 1,
         )
 
-    # Population layer
     if (
         show_population
         and districts_geojson
@@ -1105,7 +1153,6 @@ with tabs[10]:
 
         population_group.add_to(m)
 
-    # Land use layer
     if (
         show_landuse
         and "landuse_map" in data
@@ -1149,7 +1196,6 @@ with tabs[10]:
 
         landuse_group.add_to(m)
 
-    # Roads layer
     if show_roads and "roads_map" in data and not data["roads_map"].empty:
         roads_group = folium.FeatureGroup(
             name="Дорожная сеть по типам дорог",
@@ -1185,7 +1231,6 @@ with tabs[10]:
 
         roads_group.add_to(m)
 
-    # Ecology layer
     if (
         show_ecology
         and districts_geojson
@@ -1261,7 +1306,6 @@ with tabs[10]:
 
         ecology_group.add_to(m)
 
-    # Administrative boundaries are always on top
     if districts_geojson:
         boundaries_group = folium.FeatureGroup(
             name="Административные границы",

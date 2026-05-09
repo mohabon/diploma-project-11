@@ -25,11 +25,57 @@ CHECKS = [
 ]
 
 
+QUALITY_CHECKS = [
+    ("parcel geometry exists", """
+        SELECT COUNT(*)
+        FROM raw.parcel_raw
+        WHERE geom IS NULL OR ST_IsEmpty(geom)
+    """),
+
+    ("parcel geometry valid", """
+        SELECT COUNT(*)
+        FROM raw.parcel_raw
+        WHERE geom IS NOT NULL AND NOT ST_IsValid(geom)
+    """),
+
+    ("parcel SRID is 4326", """
+        SELECT COUNT(*)
+        FROM raw.parcel_raw
+        WHERE geom IS NOT NULL AND ST_SRID(geom) <> 4326
+    """),
+
+    ("parcel area positive", """
+        SELECT COUNT(*)
+        FROM raw.parcel_raw
+        WHERE area_ha IS NULL OR area_ha <= 0
+    """),
+
+    ("road geometry exists", """
+        SELECT COUNT(*)
+        FROM raw.roads_raw
+        WHERE geom IS NULL OR ST_IsEmpty(geom)
+    """),
+
+    ("road geometry valid", """
+        SELECT COUNT(*)
+        FROM raw.roads_raw
+        WHERE geom IS NOT NULL AND NOT ST_IsValid(geom)
+    """),
+
+    ("road SRID is 4326", """
+        SELECT COUNT(*)
+        FROM raw.roads_raw
+        WHERE geom IS NOT NULL AND ST_SRID(geom) <> 4326
+    """),
+]
+
+
 def main():
     failed = []
 
     with psycopg2.connect(DSN) as conn:
         with conn.cursor() as cur:
+            print("=== Required tables check ===")
             for name, sql in CHECKS:
                 cur.execute(sql)
                 rows = cur.fetchone()[0]
@@ -39,8 +85,18 @@ def main():
                 if rows <= 0:
                     failed.append(name)
 
+            print("\n=== Data quality checks ===")
+            for name, sql in QUALITY_CHECKS:
+                cur.execute(sql)
+                errors = cur.fetchone()[0]
+                status = "OK" if errors == 0 else "FAIL"
+                print(f"{status:5} {name:32} {errors}")
+
+                if errors > 0:
+                    failed.append(name)
+
     if failed:
-        print("\nEmpty required tables: " + ", ".join(failed), file=sys.stderr)
+        print("\nVerification failed: " + ", ".join(failed), file=sys.stderr)
         return 1
 
     print("\nData warehouse verification passed.")

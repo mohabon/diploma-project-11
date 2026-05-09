@@ -28,7 +28,7 @@ services:
       - ./etl:/app/etl
       - ./sample_data:/app/sample_data
       - ./sql:/app/sql
-      - ./verify_data.py:/app/verify_data.py:ro
+      - ./tests/verify_data.py:/app/verify_data.py:ro
     ports:
       - "8501:8501"
     command: >
